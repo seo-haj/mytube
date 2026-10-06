@@ -113,6 +113,26 @@ class S3Store:
             "get_object", Params={"Bucket": S3_BUCKET, "Key": key}, ExpiresIn=URL_TTL)
 
 
+def _diag():
+    """로그에 설정 점검 결과를 출력 (비밀값 전체는 절대 출력하지 않음)"""
+    if not any([S3_ENDPOINT, S3_REGION, S3_KEY_ID, S3_SECRET, S3_BUCKET]):
+        return
+    kid, sec = S3_KEY_ID or "", S3_SECRET or ""
+    print(f"S3 설정 확인 | endpoint={S3_ENDPOINT} | region={S3_REGION} | bucket={S3_BUCKET}"
+          f" | KEY_ID 길이={len(kid)} 앞3글자={kid[:3]!r}"
+          f" | SECRET 길이={len(sec)} 앞1글자={sec[:1]!r}")
+    if kid.startswith("K") or len(sec) < 30:
+        print("⚠ KEY_ID와 SECRET이 서로 바뀐 것 같아요 (keyID는 짧고, applicationKey는 K로 시작하는 긴 값)")
+    if len(kid) not in (12, 25):
+        print("⚠ KEY_ID 길이가 이상해요. B2 keyID는 보통 25자예요 (keyName/버킷이름/applicationKey를 넣은 건 아닌지 확인)")
+    if S3_ENDPOINT and not S3_ENDPOINT.startswith("https://"):
+        print("⚠ S3_ENDPOINT는 https:// 로 시작해야 해요")
+    if S3_ENDPOINT and S3_REGION and S3_REGION not in S3_ENDPOINT:
+        print("⚠ S3_REGION이 S3_ENDPOINT 안의 지역과 달라요")
+
+
+_diag()
+
 if all([S3_ENDPOINT, S3_REGION, S3_KEY_ID, S3_SECRET, S3_BUCKET]):
     store = S3Store()
 else:
