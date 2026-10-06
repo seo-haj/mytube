@@ -17,12 +17,18 @@ from werkzeug.security import check_password_hash, generate_password_hash
 # ───────── 설정 (환경변수) ─────────
 ADMINS = {a.strip() for a in os.environ.get("ADMINS", "하준").split(",") if a.strip()}
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "100"))
-S3_ENDPOINT = os.environ.get("S3_ENDPOINT")      # 예: https://s3.us-west-004.backblazeb2.com
-S3_REGION = os.environ.get("S3_REGION")          # 예: us-west-004
-S3_KEY_ID = os.environ.get("S3_KEY_ID")
-S3_SECRET = os.environ.get("S3_SECRET")
-S3_BUCKET = os.environ.get("S3_BUCKET")
-SECRET = os.environ.get("SECRET_KEY") or os.urandom(32).hex()
+def env(name):
+    """환경변수 앞뒤의 공백/줄바꿈/따옴표를 자동으로 제거 (붙여넣기 실수 방지)"""
+    v = os.environ.get(name, "").strip().strip("\"'").strip()
+    return v or None
+
+
+S3_ENDPOINT = env("S3_ENDPOINT")      # 예: https://s3.us-west-004.backblazeb2.com
+S3_REGION = env("S3_REGION")          # 예: us-west-004
+S3_KEY_ID = env("S3_KEY_ID")
+S3_SECRET = env("S3_SECRET")
+S3_BUCKET = env("S3_BUCKET")
+SECRET = env("SECRET_KEY") or os.urandom(32).hex()
 ALLOWED = {"mp4", "webm", "mkv", "mov", "m4v", "3gp"}
 URL_TTL = 60 * 60 * 6    # 영상 주소 유효시간(6시간)
 BASE = os.path.dirname(os.path.abspath(__file__))
