@@ -72,6 +72,12 @@ class LocalStore:
     def url(self, key):
         return "/local/" + key
 
+    def list(self, prefix):
+        d = os.path.join(DATA_DIR, prefix)
+        if not os.path.isdir(d):
+            return []
+        return [prefix + n for n in sorted(os.listdir(d))]
+
 
 class S3Store:
     mode = "s3"
@@ -106,6 +112,13 @@ class S3Store:
             self.c.delete_object(Bucket=S3_BUCKET, Key=key)
         except Exception:
             pass
+
+    def list(self, prefix):
+        keys = []
+        for page in self.c.get_paginator("list_objects_v2").paginate(
+                Bucket=S3_BUCKET, Prefix=prefix):
+            keys += [o["Key"] for o in page.get("Contents", [])]
+        return keys
 
     def url(self, key):
         # 버킷은 비공개 → 임시 서명 주소로 B2에서 직접 스트리밍 (서버 트래픽 안 씀)
@@ -599,7 +612,7 @@ def upload():
             "desc": request.form.get("desc", "").strip()[:2000],
             "views": 0, "likers": [], "comments": [], "ts": time.time(),
         }
-        save()
+        _save_state("db", sync=True)
     return redirect(f"/watch/{vid}")
 
 
@@ -635,6 +648,38 @@ def delete(vid):
     if v.get("thumb"):
         store.delete(f"thumbs/{v['thumb']}")
     return redirect("/")
+
+
+@app.route("/admin/recover")
+def recover():
+    """B2에는 있는데 목록(db.json)에 없는 영상을 목록에 다시 등록 (관리자 전용)"""
+    me = current()
+    if not me or not me["admin"]:
+        abort(403)
+    with LOCK:
+        db = load()
+        known = {v["file"] for v in db.values()}
+        thumbs = set(store.list("thumbs/"))
+        files = [k for k in store.list("videos/") if k.split("/", 1)[1]]
+        added = 0
+        for key in files:
+            fname = key.split("/", 1)[1]
+            if fname in known:
+                continue
+            vid = fname.rsplit(".", 1)[0]
+            has_thumb = f"thumbs/{vid}.jpg" in thumbs
+            db[vid] = {
+                "id": vid, "file": fname, "owner": me["name"],
+                "thumb": f"{vid}.jpg" if has_thumb else None,
+                "title": f"복구된 영상 {vid[:4]}", "desc": "",
+                "views": 0, "likers": [], "comments": [], "ts": time.time(),
+            }
+            added += 1
+        if added:
+            _save_state("db", sync=True)
+    return (f"복구 완료: {added}개 추가 | 저장소 영상 {len(files)}개 | "
+            f"목록에 이미 있던 영상 {len(known)}개 | 지금 목록 {len(db)}개"
+            f'<br><a href="/">홈으로</a>')
 
 
 # ───────── 댓글 ─────────
